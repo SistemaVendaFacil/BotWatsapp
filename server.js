@@ -54,6 +54,7 @@ function iniciarBot() {
         useChrome: true,
         debug: false,
         logQR: true,
+        browserPath: '/usr/bin/chromium',
         browserArgs: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
