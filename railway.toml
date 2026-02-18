@@ -1,9 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install"
-
-[phases.setup]
-nixPkgs = ["libglib2.0-0", "libgtk-3-0", "libx11-xcb1", "libxcomposite1", "libxcursor1", "libxdamage1", "libxi6", "libxtst6", "libnss3", "libxrandr2", "libasound2", "libpangocairo-1.0-0", "libatk1.0-0", "libcairo-gobject2", "libgdk-pixbuf2.0-0", "chromium"]
+buildCommand = "apt-get install -y libglib2.0-0 libgtk-3-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 && npm install"
 
 [deploy]
 startCommand = "node server.js"
