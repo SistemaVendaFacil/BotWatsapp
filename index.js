@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
@@ -131,7 +131,10 @@ function createSession(sessionId, phoneIntl, phoneLocal, company = '') {
       devtools: false,
       useChrome: true,
       logQR: true,
-      puppeteerOptions: { headless: true },
+      puppeteerOptions: { 
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      },
       catchQR: (base64Qr, asciiQR) => updateQrCode(sessionId, base64Qr, asciiQR),
       statusFind: (statusSession) => handleStatusChange(sessionId, statusSession),
     })
