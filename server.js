@@ -3,8 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const wppconnect = require('@wppconnect-team/wppconnect');
 
-// Usar Chromium do Alpine Linux
-process.env.PUPPETEER_EXECUTABLE_PATH = '/usr/bin/chromium-browser';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
