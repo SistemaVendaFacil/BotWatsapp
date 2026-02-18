@@ -1,35 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
 const wppconnect = require('@wppconnect-team/wppconnect');
-
-// Detectar Chromium do sistema (Railway/Linux)
-const chromiumPaths = [
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable',
-    '/snap/bin/chromium',
-    '/opt/chromium/chrome'
-];
-const systemChrome = chromiumPaths.find(p => fs.existsSync(p)) || null;
-if (systemChrome) {
-    process.env.PUPPETEER_EXECUTABLE_PATH = systemChrome;
-    console.log('[Memocash] Usando Chrome do sistema:', systemChrome);
-} else {
-    // Fallback: usar which para encontrar dinamicamente
-    const { execSync } = require('child_process');
-    try {
-        const found = execSync('which chromium-browser || which chromium || which google-chrome', { encoding: 'utf8' }).trim();
-        if (found) {
-            process.env.PUPPETEER_EXECUTABLE_PATH = found;
-            console.log('[Memocash] Chrome encontrado via which:', found);
-        }
-    } catch (err) {
-        console.log('[Memocash] Chrome não encontrado, usando Puppeteer padrão');
-    }
-}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -79,23 +51,9 @@ function iniciarBot() {
         },
         headless: true,
         devtools: false,
-        useChrome: !!systemChrome,
+        useChrome: false,
         debug: false,
         logQR: true,
-        puppeteerOptions: {
-            executablePath: systemChrome || undefined,
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--single-process',
-                '--disable-gpu'
-            ]
-        },
         browserArgs: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
