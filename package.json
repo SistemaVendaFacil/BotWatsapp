@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@wppconnect-team/wppconnect": "^1.38.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
