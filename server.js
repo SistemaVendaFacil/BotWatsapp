@@ -1,7 +1,21 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const wppconnect = require('@wppconnect-team/wppconnect');
+
+// Detectar Chromium do sistema (Railway/Linux)
+const chromiumPaths = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable'
+];
+const systemChrome = chromiumPaths.find(p => fs.existsSync(p)) || null;
+if (systemChrome) {
+    process.env.PUPPETEER_EXECUTABLE_PATH = systemChrome;
+    console.log('[Memocash] Usando Chrome do sistema:', systemChrome);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -51,11 +65,11 @@ function iniciarBot() {
         },
         headless: true,
         devtools: false,
-        useChrome: true,
+        useChrome: !!systemChrome,
         debug: false,
         logQR: true,
-        browserPath: '/usr/bin/chromium-browser',
         puppeteerOptions: {
+            executablePath: systemChrome || undefined,
             headless: true,
             args: [
                 '--no-sandbox',
