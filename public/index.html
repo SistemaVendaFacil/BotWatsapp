@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WPPConnect • Painel de Sessões</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section class="container-card mx-auto col-12 col-lg-10 col-xxl-8">
+        <header class="mb-5 text-center">
+          <p class="mb-2 text-uppercase fw-semibold text-secondary">WPPConnect</p>
+          <h1 class="display-5 fw-semibold">Conectar WhatsApp API</h1>
+          <p class="text-light-emphasis mb-0">
+            Digite seu telefone com DDD para gerar o QR Code de pareamento.
+          </p>
+        </header>
+
+        <form id="sessionForm" class="row g-3 align-items-end mb-4" autocomplete="off">
+          <div class="col-12">
+            <label for="companyInput" class="form-label">Nome da empresa</label>
+            <input type="text" class="form-control form-control-lg" id="companyInput" name="company" placeholder="Ex: Pizzaria do João" maxlength="50" />
+          </div>
+          <div class="col-12 col-md-8">
+            <label for="phoneInput" class="form-label">Telefone (DDD + número)</label>
+            <input type="tel" class="form-control form-control-lg" id="phoneInput" name="phone" placeholder="(11) 90000-0000" required />
+          </div>
+          <div class="col-12 col-md-4 d-grid">
+            <button type="submit" class="btn btn-lg btn-primary">Gerar QR Code</button>
+          </div>
+        </form>
+
+        <div id="feedbackAlert" class="alert d-none" role="alert"></div>
+
+        <div class="row g-4">
+          <div class="col-12" style="display: none;">
+            <p class="text-uppercase text-secondary fw-semibold small mb-2">Status da sessão</p>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <span id="statusPill" class="status-pill status-waiting">Aguardando dados</span>
+              <span class="text-light-emphasis small d-none">Sessão: <strong id="sessionLabel">—</strong></span>
+            </div>
+            <p class="small text-light-emphasis mt-2 mb-0">Última atualização: <span id="updatedAtLabel">—</span></p>
+          </div>
+
+          <div class="col-12 d-flex flex-column">
+            <p class="text-uppercase text-secondary fw-semibold small mb-2">QR Code</p>
+            <div id="qrContainer" class="qr-wrapper text-center flex-grow-1 p-2">
+              <div>
+                <p class="mb-1 fw-semibold">Aguardando número telefônico</p>
+                <p class="mb-0 text-light-emphasis small">Informe um telefone para gerar o QR Code de conexão.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 d-flex flex-column d-none">
+            <p class="text-uppercase text-secondary fw-semibold small mb-2">Aparelhos conectados</p>
+            <div id="devicesList" class="list-empty flex-grow-1">
+              Nenhum aparelho conectado ainda. Conclua o pareamento para visualizar aqui.
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="js/app.js" defer></script>
+  </body>
+</html>
