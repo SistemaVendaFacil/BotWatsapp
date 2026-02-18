@@ -8,7 +8,20 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const sessions = new Map();
 
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost', 'http://127.0.0.1', 'http://192.168.15.100:8080'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Middleware CORS para todas as respostas
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -75,6 +88,35 @@ app.get('/api/sessions', async (_req, res) => {
   );
   const payload = entries.map(([, data]) => serializeSession(data));
   return res.json({ success: true, sessions: payload });
+});
+
+app.post('/api/send-message', async (req, res) => {
+  const { sessionId, phone, message } = req.body || {};
+
+  if (!sessionId || !phone || !message) {
+    return res.status(400).json({ success: false, message: 'sessionId, phone e message são obrigatórios.' });
+  }
+
+  const sessionData = sessions.get(sessionId);
+  if (!sessionData) {
+    return res.status(404).json({ success: false, message: 'Sessão não encontrada.' });
+  }
+
+  if (!['CONECTADO', 'SYNCING'].includes(sessionData.status) || !sessionData.client) {
+    return res.status(503).json({ success: false, message: 'Sessão não está conectada.' });
+  }
+
+  const digits = String(phone).replace(/\D/g, '');
+  const phoneIntl = digits.startsWith('55') ? digits : `55${digits}`;
+  const chatId = `${phoneIntl}@c.us`;
+
+  try {
+    await sessionData.client.sendText(chatId, message);
+    return res.json({ success: true, message: 'Mensagem enviada com sucesso.' });
+  } catch (error) {
+    console.error(`Erro ao enviar mensagem na sessão ${sessionId}:`, error.message);
+    return res.status(500).json({ success: false, message: error.message || 'Erro ao enviar mensagem.' });
+  }
 });
 
 app.delete('/api/session/:sessionId', async (req, res) => {
