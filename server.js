@@ -3,6 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const wppconnect = require('@wppconnect-team/wppconnect');
 
+// Forçar uso do Chrome padrão do Puppeteer (não usar sistema)
+delete process.env.PUPPETEER_EXECUTABLE_PATH;
+process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = 'false';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API_SECRET = process.env.Bot_whatsapp || 'Svfa123';
