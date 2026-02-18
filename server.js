@@ -54,7 +54,20 @@ function iniciarBot() {
         useChrome: true,
         debug: false,
         logQR: true,
-        browserPath: '/usr/bin/chromium',
+        browserPath: '/usr/bin/chromium-browser',
+        puppeteerOptions: {
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+                '--disable-gpu'
+            ]
+        },
         browserArgs: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
