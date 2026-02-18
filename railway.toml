@@ -1,6 +1,4 @@
-[build]
-builder = "NIXPACKS"
-buildCommand = "apk add --no-cache chromium nss gtk+3.0 atk atk-bridge cups-libs libdrm libxkbcommon libxcomposite libxdamage libxfixes libxrandr mesa-gbm alsa-lib && npm install && npx puppeteer browsers install chrome"
+ate && apt-get install -y --no-install-recommends libglib2.0-0 libgtk-3-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 chromium-browser && npm install"
 
 [deploy]
 startCommand = "node server.js"
