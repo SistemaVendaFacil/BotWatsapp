@@ -3,9 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const wppconnect = require('@wppconnect-team/wppconnect');
 
-// Forçar uso do Chrome padrão do Puppeteer (não usar sistema)
-delete process.env.PUPPETEER_EXECUTABLE_PATH;
-process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = 'false';
+// Usar Chromium do Alpine Linux
+process.env.PUPPETEER_EXECUTABLE_PATH = '/usr/bin/chromium-browser';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
