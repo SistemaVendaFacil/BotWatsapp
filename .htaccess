@@ -1,0 +1,25 @@
+# Bloquear acesso direto aos arquivos sensíveis
+<Files "server.js">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+<Files ".env">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+<Files ".env.example">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+<Files "package.json">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+<Files "package-lock.json">
+    Order Allow,Deny
+    Deny from all
+</Files>

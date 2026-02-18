@@ -1,0 +1,12 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install"
+
+[deploy]
+startCommand = "node server.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+[healthcheck]
+path = "/"
+timeout = 30
