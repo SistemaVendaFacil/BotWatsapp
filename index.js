@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 const sessions = new Map();
 
 app.use(cors({
-    origin: ['http://localhost', 'http://127.0.0.1', 'http://192.168.15.100:8080'],
+    origin: ['http://localhost', 'http://127.0.0.1', 'http://192.168.15.100:8080', 'https://sistemavendafacil.com'],
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
