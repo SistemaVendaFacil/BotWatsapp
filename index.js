@@ -106,9 +106,16 @@ app.post('/api/send-message', async (req, res) => {
     return res.status(503).json({ success: false, message: 'Sessão não está conectada.' });
   }
 
-  const digits = String(phone).replace(/\D/g, '');
-  const phoneIntl = digits.startsWith('55') ? digits : `55${digits}`;
-  const chatId = `${phoneIntl}@c.us`;
+  const isGroup = String(phone).includes('@g.us');
+  let chatId;
+
+  if (isGroup) {
+    chatId = String(phone).trim();
+  } else {
+    const digits = String(phone).replace(/\D/g, '');
+    const phoneIntl = digits.startsWith('55') ? digits : `55${digits}`;
+    chatId = `${phoneIntl}@c.us`;
+  }
 
   try {
     await sessionData.client.sendText(chatId, message);
