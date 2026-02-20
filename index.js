@@ -147,7 +147,10 @@ app.delete('/api/session/:sessionId', async (req, res) => {
   return res.json({ success: true });
 });
 
-app.listen(PORT, () => console.log(`Servidor WPPConnect ouvindo na porta ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Servidor WPPConnect ouvindo na porta ${PORT}`);
+  restorePersistedSessions();
+});
 
 function sanitizePhone(phone) {
   return String(phone || '').replace(/\D/g, '');
@@ -343,5 +346,85 @@ async function deleteSessionArtifacts(sessionId) {
     await fs.promises.rm(dirPath, { recursive: true, force: true });
   } catch (error) {
     console.error(`Erro ao remover pasta da sessão ${sessionId}:`, error.message);
+  }
+}
+
+async function restorePersistedSessions() {
+  const tokensDir = path.join(__dirname, 'tokens');
+
+  let entries;
+  try {
+    entries = await fs.promises.readdir(tokensDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  const sessionDirs = entries.filter((e) => e.isDirectory() && e.name.startsWith('session_'));
+
+  if (!sessionDirs.length) {
+    console.log('[Restore] Nenhuma sessão persistida encontrada.');
+    return;
+  }
+
+  console.log(`[Restore] Restaurando ${sessionDirs.length} sessão(ões)...`);
+
+  for (const dir of sessionDirs) {
+    const sessionId = dir.name;
+
+    if (sessions.has(sessionId)) {
+      continue;
+    }
+
+    const phoneIntl = sessionId.replace('session_', '');
+    const phoneLocal = phoneIntl.startsWith('55') ? phoneIntl.slice(2) : phoneIntl;
+
+    const sessionData = {
+      sessionId,
+      phone: phoneLocal,
+      phoneIntl,
+      company: '',
+      status: 'AGUARDANDO_QR',
+      qrCode: null,
+      qrCodeAscii: null,
+      updatedAt: new Date().toISOString(),
+      connectedAt: null,
+      devices: [],
+      rawStatus: null,
+      error: null,
+      client: null,
+    };
+
+    sessions.set(sessionId, sessionData);
+
+    wppconnect
+      .create({
+        session: sessionId,
+        autoClose: 0,
+        headless: true,
+        devtools: false,
+        useChrome: true,
+        logQR: false,
+        puppeteerOptions: {
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        },
+        catchQR: (base64Qr, asciiQR) => {
+          console.log(`[Restore] Sessão ${sessionId} expirou, QR Code necessário.`);
+          updateQrCode(sessionId, base64Qr, asciiQR);
+        },
+        statusFind: (statusSession) => handleStatusChange(sessionId, statusSession),
+      })
+      .then((client) => {
+        sessionData.client = client;
+        registerClientEvents(sessionId, client);
+        sessionData.updatedAt = new Date().toISOString();
+        console.log(`[Restore] Sessão ${sessionId} restaurada com sucesso.`);
+      })
+      .catch((error) => {
+        sessionData.status = 'ERRO';
+        sessionData.error = error.message || 'Falha ao restaurar sessão';
+        sessionData.updatedAt = new Date().toISOString();
+        console.error(`[Restore] Erro ao restaurar sessão ${sessionId}:`, error.message);
+      });
   }
 }
