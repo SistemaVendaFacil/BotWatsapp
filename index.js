@@ -11,8 +11,8 @@ const sessions = new Map();
 
 // Configuração do banco de dados direta
 const dbConfig = {
-  host: process.env.DB_HOST || 'sistemavendafacil.com', // <-- Endereço do seu site na Hostinger
-  user: process.env.DB_USER || 'u490253103_automaca',   // <-- Conforme a imagem (sem o 'o' no final se for esse mesmo o usuário)
+  host: process.env.DB_HOST || 'srv881.hstgr.io', // <-- Host oficial da Hostinger
+  user: process.env.DB_USER || 'u490253103_automacao',
   password: process.env.DB_PASSWORD || 'Y4m4t02@12345',
   database: process.env.DB_NAME || 'u490253103_automacao',
   charset: 'utf8mb4',
