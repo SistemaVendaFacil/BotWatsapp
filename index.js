@@ -504,9 +504,9 @@ async function verificarAgendamentos() {
       WHERE DATE(t.agendamento) = CURDATE()
       AND t.agendamento IS NOT NULL
       AND (
-        (t.whatsapp_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) = 60)
+        (t.whatsapp_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 60)
         OR 
-        (t.whatsapp_grupo_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) = 30)
+        (t.whatsapp_grupo_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 30)
       )
       ORDER BY t.agendamento
     `);
@@ -528,14 +528,14 @@ async function verificarAgendamentos() {
 
       console.log(`[Agendador] Agendamento #${agendamento.id}: ${minutosRestantes} minutos restantes`);
 
-      // Envia mensagem individual 1 hora antes
-      if (minutosRestantes <= 60 && minutosRestantes > 59 && !agendamento.whatsapp_enviado) {
+      // Envia mensagem individual se ainda não foi enviado e já passou de 1 hora antes
+      if (!agendamento.whatsapp_enviado && minutosRestantes <= 60) {
         console.log(`[Agendador] Enviando mensagem individual para #${agendamento.id}...`);
         await enviarMensagemIndividual(connection, agendamento);
       }
 
-      // Envia mensagem no grupo 30 minutos antes
-      if (minutosRestantes <= 30 && minutosRestantes > 29 && !agendamento.whatsapp_grupo_enviado) {
+      // Envia mensagem no grupo se ainda não foi enviado e já passou de 30 minutos antes
+      if (!agendamento.whatsapp_grupo_enviado && minutosRestantes <= 30) {
         console.log(`[Agendador] Enviando mensagem de grupo para #${agendamento.id}...`);
         await enviarMensagemGrupo(connection, agendamento);
       }
