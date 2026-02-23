@@ -356,6 +356,22 @@ function ensureCountryCode(localDigits) {
   return localDigits.startsWith('55') ? localDigits : `55${localDigits}`;
 }
 
+function getConnectedSessionByConfig(sessionId) {
+  const sessionIdConfigurada = String(sessionId || '').trim();
+
+  if (sessionIdConfigurada) {
+    const sessao = sessions.get(sessionIdConfigurada);
+    if (sessao && ['CONECTADO', 'SYNCING'].includes(sessao.status) && sessao.client) {
+      return sessao;
+    }
+    return null;
+  }
+
+  return Array.from(sessions.values()).find(
+    (sessao) => ['CONECTADO', 'SYNCING'].includes(sessao.status) && sessao.client
+  ) || null;
+}
+
 async function deleteSessionArtifacts(sessionId) {
   const dirPath = path.join(__dirname, 'tokens', sessionId);
 
@@ -498,9 +514,11 @@ async function verificarAgendamentos() {
         t.agendamento,
         t.whatsapp_enviado,
         t.whatsapp_grupo_enviado,
-        t.responsavel_finalizacao as grupo_whatsapp
+        cfg.whatsapp_sessao,
+        cfg.whatsapp_grupo
       FROM tickets t
       LEFT JOIN clientes c ON t.usuario = c.id_memocash
+      LEFT JOIN configuracoes cfg ON cfg.id = 1
       WHERE DATE(t.agendamento) = CURDATE()
       AND t.agendamento IS NOT NULL
       AND (
@@ -558,11 +576,10 @@ async function verificarAgendamentos() {
 
 async function enviarMensagemIndividual(connection, agendamento) {
   try {
-    // Pega a primeira sessão conectada disponível
-    const sessaoConectada = Array.from(sessions.values()).find(s => s.status === 'CONECTADO' && s.client);
+    const sessaoConectada = getConnectedSessionByConfig(agendamento.whatsapp_sessao);
     
     if (!sessaoConectada) {
-      console.log('[Agendador] Nenhuma sessão conectada disponível para enviar mensagem individual.');
+      console.log('[Agendador] Sessão configurada não está conectada para enviar mensagem individual.');
       return false;
     }
 
@@ -606,15 +623,16 @@ async function enviarMensagemIndividual(connection, agendamento) {
 
 async function enviarMensagemGrupo(connection, agendamento) {
   try {
-    // Pega a primeira sessão conectada disponível
-    const sessaoConectada = Array.from(sessions.values()).find(s => s.status === 'CONECTADO' && s.client);
+    const sessaoConectada = getConnectedSessionByConfig(agendamento.whatsapp_sessao);
     
     if (!sessaoConectada) {
-      console.log('[Agendador] Nenhuma sessão conectada disponível para enviar mensagem no grupo.');
+      console.log('[Agendador] Sessão configurada não está conectada para enviar mensagem no grupo.');
       return false;
     }
 
-    if (!agendamento.grupo_whatsapp) {
+    const grupoWhatsapp = String(agendamento.whatsapp_grupo || '').trim();
+
+    if (!grupoWhatsapp) {
       console.log(`[Agendador] Agendamento ${agendamento.id} não possui grupo WhatsApp definido.`);
       return false;
     }
@@ -634,14 +652,7 @@ async function enviarMensagemGrupo(connection, agendamento) {
       `✅ Sistema online\n\n` +
       `*Boa sorte, equipe!* 💪🎉`;
 
-    // OBSERVAÇÃO: Você precisa configurar o grupo WhatsApp no campo responsavel_finalizacao
-    // Formato esperado: 5511999998888@g.us
-    if (!agendamento.grupo_whatsapp) {
-      console.log(`[Agendador] Ticket #${agendamento.id} não possui grupo WhatsApp definido no campo responsavel_finalizacao`);
-      return false;
-    }
-
-    await sessaoConectada.client.sendText(agendamento.grupo_whatsapp, mensagem);
+    await sessaoConectada.client.sendText(grupoWhatsapp, mensagem);
     
     // Marca como enviado no banco
     await connection.execute(
