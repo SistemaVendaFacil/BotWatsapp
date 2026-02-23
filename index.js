@@ -515,7 +515,9 @@ async function verificarAgendamentos() {
         t.whatsapp_enviado,
         t.whatsapp_grupo_enviado,
         cfg.whatsapp_sessao,
-        cfg.whatsapp_grupo
+        cfg.whatsapp_grupo,
+        cfg.whatsapp_agendamento_individual,
+        cfg.whatsapp_agendamento_grupo
       FROM tickets t
       LEFT JOIN clientes c ON t.usuario = c.id_memocash
       LEFT JOIN configuracoes cfg ON cfg.id = 1
@@ -583,15 +585,13 @@ async function enviarMensagemIndividual(connection, agendamento) {
       return false;
     }
 
-    const mensagem = `📅 *LEMBRETE DE AGENDAMENTO* 📅\n\n` +
-      `Olá, ${agendamento.nome_cliente || 'Cliente'}! 👋\n\n` +
-      `Você tem um agendamento hoje:\n` +
-      `🕐 *Horário:* ${new Date(agendamento.agendamento).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}\n` +
-      `📋 *Assunto:* ${agendamento.assunto}\n` +
-      `🏢 *Setor:* ${agendamento.setor}\n` +
-      `📝 *Descrição:* ${agendamento.descricao}\n\n` +
-      `Por favor, prepare-se para o atendimento. Estamos aguardando você! 😊\n\n` +
-      `*Atenciosamente,*\n*Equipe Memocash*`;
+    let mensagemIndividual = agendamento.whatsapp_agendamento_individual || '';
+    mensagemIndividual = mensagemIndividual.replace('{NOME_CLIENTE}', agendamento.nome_cliente || 'Cliente');
+    mensagemIndividual = mensagemIndividual.replace('{HORARIO}', new Date(agendamento.agendamento).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'}));
+    mensagemIndividual = mensagemIndividual.replace('{ASSUNTO}', agendamento.assunto);
+    mensagemIndividual = mensagemIndividual.replace('{SETOR}', agendamento.setor);
+    mensagemIndividual = mensagemIndividual.replace('{DESCRICAO}', agendamento.descricao);
+    const mensagem = mensagemIndividual;
 
     // Envia mensagem se tiver telefone disponível
     if (agendamento.telefone_cliente) {
@@ -637,20 +637,14 @@ async function enviarMensagemGrupo(connection, agendamento) {
       return false;
     }
 
-    const mensagem = `🚨 *AGENDAMENTO IMINENTE* 🚨\n\n` +
-      `⏰ *FALTAM 30 MINUTOS!* ⏰\n\n` +
-      `🎫 *Ticket ID:* ${agendamento.id}\n` +
-      `� *Usuário:* ${agendamento.nome_cliente}\n` +
-      `🏢 *Setor:* ${agendamento.setor}\n` +
-      `📋 *Assunto:* ${agendamento.assunto}\n` +
-      `� *Descrição:* ${agendamento.descricao}\n` +
-      `�� *Horário:* ${new Date(agendamento.agendamento).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}\n\n` +
-      `🏃‍♂️ Preparem-se! O atendimento está próximo! 🏃‍♀️\n\n` +
-      `🔔 *Não se esqueçam de verificar:* 🔔\n` +
-      `✅ Materiais necessários\n` +
-      `✅ Espaço preparado\n` +
-      `✅ Sistema online\n\n` +
-      `*Boa sorte, equipe!* 💪🎉`;
+    let mensagemGrupo = agendamento.whatsapp_agendamento_grupo || '';
+    mensagemGrupo = mensagemGrupo.replace('{ID}', agendamento.id);
+    mensagemGrupo = mensagemGrupo.replace('{NOME_CLIENTE}', agendamento.nome_cliente);
+    mensagemGrupo = mensagemGrupo.replace('{SETOR}', agendamento.setor);
+    mensagemGrupo = mensagemGrupo.replace('{ASSUNTO}', agendamento.assunto);
+    mensagemGrupo = mensagemGrupo.replace('{DESCRICAO}', agendamento.descricao);
+    mensagemGrupo = mensagemGrupo.replace('{HORARIO}', new Date(agendamento.agendamento).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'}));
+    const mensagem = mensagemGrupo;
 
     await sessaoConectada.client.sendText(grupoWhatsapp, mensagem);
     
