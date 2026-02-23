@@ -9,40 +9,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const sessions = new Map();
 
-// Lê configuração do banco de dados do arquivo PHP
-function getDbConfig() {
-  try {
-    const dbConfigPath = path.join(__dirname, '..', 'config', 'database.php');
-    const dbConfigContent = fs.readFileSync(dbConfigPath, 'utf8');
-    
-    // Extrai valores do arquivo PHP usando regex
-    const host = dbConfigContent.match(/host = '([^']+)'/)?.[1] || 'localhost';
-    const database = dbConfigContent.match(/database = '([^']+)'/)?.[1] || 'automacao';
-    const username = dbConfigContent.match(/username = '([^']+)'/)?.[1] || 'root';
-    const password = dbConfigContent.match(/password = '([^']+)'/)?.[1] || '';
-    
-    return {
-      host: process.env.DB_HOST || host,
-      user: process.env.DB_USER || username,
-      password: process.env.DB_PASSWORD || password,
-      database: process.env.DB_NAME || database,
-      charset: 'utf8mb4',
-      timezone: '-03:00'
-    };
-  } catch (error) {
-    console.error('[Erro] Não foi possível ler o arquivo database.php, usando valores padrão:', error.message);
-    return {
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'automacao',
-      charset: 'utf8mb4',
-      timezone: '-03:00'
-    };
-  }
-}
-
-const dbConfig = getDbConfig();
+// Configuração do banco de dados direta
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'u490253103_automacao',
+  password: process.env.DB_PASSWORD || 'Y4m4t02@12345',
+  database: process.env.DB_NAME || 'u490253103_automacao',
+  charset: 'utf8mb4',
+  timezone: '-03:00'
+};
 
 // Variáveis de controle do agendador
 let agendamentoAtivo = false;
@@ -501,12 +476,16 @@ async function verificarAgendamentos() {
   
   let connection;
   try {
+    console.log('[Agendador] Conectando ao banco de dados...');
     connection = await mysql.createConnection(dbConfig);
+    console.log('[Agendador] Conectado ao banco com sucesso!');
     
     // Define fuso horário de Brasília igual ao arquivo PHP
     await connection.execute("SET time_zone = '-03:00'");
+    console.log('[Agendador] Timezone configurado para -03:00');
     
     // Busca agendamentos que precisam de notificação
+    console.log('[Agendador] Executando query de agendamentos...');
     const [agendamentos] = await connection.execute(`
       SELECT 
         t.id,
@@ -532,6 +511,8 @@ async function verificarAgendamentos() {
       ORDER BY t.agendamento
     `);
 
+    console.log(`[Agendador] Query executada. Encontrados ${agendamentos.length} agendamentos.`);
+
     if (agendamentos.length === 0) {
       console.log('[Agendador] Nenhum agendamento para notificar no momento.');
       return;
@@ -540,26 +521,37 @@ async function verificarAgendamentos() {
     console.log(`[Agendador] Encontrados ${agendamentos.length} agendamentos para processar.`);
 
     for (const agendamento of agendamentos) {
+      console.log(`[Agendador] Processando agendamento #${agendamento.id}...`);
       const agora = new Date();
       const dataHoraAgendamento = new Date(agendamento.agendamento);
       const minutosRestantes = Math.floor((dataHoraAgendamento - agora) / (1000 * 60));
 
+      console.log(`[Agendador] Agendamento #${agendamento.id}: ${minutosRestantes} minutos restantes`);
+
       // Envia mensagem individual 1 hora antes
       if (minutosRestantes <= 60 && minutosRestantes > 59 && !agendamento.whatsapp_enviado) {
+        console.log(`[Agendador] Enviando mensagem individual para #${agendamento.id}...`);
         await enviarMensagemIndividual(connection, agendamento);
       }
 
       // Envia mensagem no grupo 30 minutos antes
       if (minutosRestantes <= 30 && minutosRestantes > 29 && !agendamento.whatsapp_grupo_enviado) {
+        console.log(`[Agendador] Enviando mensagem de grupo para #${agendamento.id}...`);
         await enviarMensagemGrupo(connection, agendamento);
       }
     }
 
   } catch (error) {
-    console.error('[Agendador] Erro ao verificar agendamentos:', error.message);
+    console.error('[Agendador] Erro detalhado ao verificar agendamentos:', error);
+    console.error('[Agendador] Stack trace:', error.stack);
   } finally {
     if (connection) {
-      await connection.end();
+      try {
+        await connection.end();
+        console.log('[Agendador] Conexão com banco fechada.');
+      } catch (closeError) {
+        console.error('[Agendador] Erro ao fechar conexão:', closeError);
+      }
     }
   }
 }
@@ -696,4 +688,51 @@ app.get('/api/agendador/status', (req, res) => {
     ativo: agendamentoAtivo,
     proximaVerificacao: agendamentoAtivo ? '5 minutos' : 'Não agendado'
   });
+});
+
+// Endpoint para testar conexão com banco
+app.get('/api/test-db', async (req, res) => {
+  let connection;
+  try {
+    console.log('[Test DB] Configuração:', dbConfig);
+    connection = await mysql.createConnection(dbConfig);
+    await connection.execute("SET time_zone = '-03:00'");
+    
+    // Testa query simples
+    const [result] = await connection.execute('SELECT 1 as test');
+    
+    // Testa query de agendamentos
+    const [agendamentos] = await connection.execute(`
+      SELECT COUNT(*) as total FROM tickets 
+      WHERE agendamento IS NOT NULL 
+      AND DATE(agendamento) = CURDATE()
+    `);
+    
+    await connection.end();
+    
+    return res.json({
+      success: true,
+      message: 'Conexão com banco funcionando!',
+      dbConfig: {
+        host: dbConfig.host,
+        database: dbConfig.database,
+        user: dbConfig.user
+      },
+      agendamentosHoje: agendamentos[0].total
+    });
+    
+  } catch (error) {
+    console.error('[Test DB] Erro:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  } finally {
+    if (connection) {
+      try {
+        await connection.end();
+      } catch (e) {}
+    }
+  }
 });
