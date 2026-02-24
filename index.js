@@ -525,9 +525,9 @@ async function verificarAgendamentos() {
       WHERE DATE(t.agendamento) = CURDATE()
       AND t.agendamento IS NOT NULL
       AND (
-        (t.whatsapp_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 2)
+        (t.whatsapp_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 60)
         OR 
-        (t.whatsapp_grupo_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 2)
+        (t.whatsapp_grupo_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 60)
       )
       ORDER BY t.agendamento
     `);
@@ -566,16 +566,20 @@ async function verificarAgendamentos() {
 
       console.log(`[Agendador] Agendamento #${agendamento.id}: ${minutosRestantes} minutos restantes`);
 
-      // Envia mensagem individual se ainda não foi enviado e já passou de 2 minutos antes
-      if (!agendamento.whatsapp_enviado && minutosRestantes <= 2) {
-        console.log(`[Agendador] Enviando mensagem individual para #${agendamento.id}...`);
-        await enviarMensagemIndividual(connection, agendamento);
-      }
-
-      // Envia mensagem no grupo se ainda não foi enviado e já passou de 2 minutos antes
-      if (!agendamento.whatsapp_grupo_enviado && minutosRestantes <= 2) {
-        console.log(`[Agendador] Enviando mensagem de grupo para #${agendamento.id}...`);
-        await enviarMensagemGrupo(connection, agendamento);
+      // Só envia individual se AMBOS os campos forem NULL
+      if (!agendamento.whatsapp_enviado && !agendamento.whatsapp_grupo_enviado && minutosRestantes <= 60) {
+        console.log(`[Agendador] Tentando enviar mensagem individual para #${agendamento.id}...`);
+        const enviouIndividual = await enviarMensagemIndividual(connection, agendamento);
+        
+        // Se conseguiu enviar individual, tenta enviar grupo também
+        if (enviouIndividual) {
+          console.log(`[Agendador] Individual enviado! Tentando enviar para grupo também...`);
+          await enviarMensagemGrupo(connection, agendamento);
+        } else {
+          // Se falhou individual, tenta grupo como alternativa
+          console.log(`[Agendador] Falhou individual. Tentando enviar para grupo como alternativa...`);
+          await enviarMensagemGrupo(connection, agendamento);
+        }
       }
     }
 
