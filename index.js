@@ -288,9 +288,31 @@ function registerClientEvents(sessionId, client) {
     try {
       if (message.from && !message.from.includes('@g.us')) {
         const contato = await client.getContact(message.from);
-        if (contato && contato.id) {
-          const numeroLimpo = sanitizePhone(contato.id.user || contato.id.replace('@c.us', ''));
-          numeroReal = normalizeLocalPhone(numeroLimpo);
+        console.log('[DEBUG] Contato retornado:', JSON.stringify(contato, null, 2));
+        
+        if (contato) {
+          // Tentar diferentes propriedades onde pode estar o número
+          const possiveisNumeros = [
+            contato.number,
+            contato.phone,
+            contato.id?.user,
+            contato.id,
+            contato.pushname,
+            contato.verifiedName,
+            contato.formattedName
+          ];
+          
+          console.log('[DEBUG] Possíveis números:', possiveisNumeros);
+          
+          for (const prop of possiveisNumeros) {
+            if (prop && typeof prop === 'string' && /\d/.test(prop)) {
+              const numeroLimpo = sanitizePhone(prop.replace('@c.us', ''));
+              if (numeroLimpo.length >= 10) {
+                numeroReal = normalizeLocalPhone(numeroLimpo);
+                break;
+              }
+            }
+          }
         }
       }
     } catch (error) {
