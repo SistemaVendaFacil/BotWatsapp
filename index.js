@@ -287,16 +287,22 @@ function registerClientEvents(sessionId, client) {
       await client.sendText(message.from, 'pong');
     }
     
+    // Resposta para opção 1
+    if (message.body?.trim() === '1') {
+      await client.sendText(message.from, '🎉 *Que ótima escolha!* Estou muito feliz em ajudar! 😊\n\n📞 *Vou te passar o contato de nosso consultor:*\n\n👨‍💼 **Alex**\n📱 (12) 99792-3453\n\n🚀 Ele entrará em contato com você o mais rápido possível para tirar todas as dúvidas! ✨\n\nAgradecemos seu interesse! 💚');
+      return;
+    }
+    
     // Resposta para opção 2
     if (message.body?.trim() === '2') {
-      await client.sendText(message.from, '😔 *Sentimos muito por estar tomando seu tempo* 🕒\n\nCaso mude de ideia, basta digitar **1** que estaremos aqui para ajudar! 💙✨');
+      await client.sendText(message.from, '😔 *Sentimos muito por estar tomando seu tempo* 🕒\n\nCaso mude de ideia, basta digitar **1** que estaremos aqui para ajudar! 💚✨');
       return;
     }
     
     // Resposta para opções diferentes de 1 e 2
     const mensagemLimpa = message.body?.trim();
-    if (mensagemLimpa && mensagemLimpa !== '1' && mensagemLimpa !== '2' && !isNaN(mensagemLimpa)) {
-      await client.sendText(message.from, '🤖 *Infelizmente sou um robô* e só aceito os números **1** ou **2**! 😅\n\nPor favor, digite apenas **1** para continuar ou **2** para finalizar. 🙏');
+    if (mensagemLimpa && mensagemLimpa !== '1' && mensagemLimpa !== '2') {
+      await client.sendText(message.from, '🤖 *Infelizmente sou um robô* e não entendo o que você está me falando! 🤖\n\n');
       return;
     }
   });
