@@ -287,29 +287,32 @@ function registerClientEvents(sessionId, client) {
     
     try {
       if (message.from && !message.from.includes('@g.us')) {
-        const contato = await client.getContact(message.from);
-        console.log('[DEBUG] Contato retornado:', JSON.stringify(contato, null, 2));
-        
-        if (contato) {
-          // Tentar diferentes propriedades onde pode estar o número
-          const possiveisNumeros = [
-            contato.number,
-            contato.phone,
-            contato.id?.user,
-            contato.id,
-            contato.pushname,
-            contato.verifiedName,
-            contato.formattedName
-          ];
+        // Tentar obter número real usando getNumberProfile
+        try {
+          const profile = await client.getNumberProfile(message.from);
+          console.log('[DEBUG] Profile retornado:', JSON.stringify(profile, null, 2));
           
-          console.log('[DEBUG] Possíveis números:', possiveisNumeros);
+          if (profile && profile.number) {
+            const numeroLimpo = sanitizePhone(profile.number);
+            if (numeroLimpo.length >= 10) {
+              numeroReal = normalizeLocalPhone(numeroLimpo);
+            }
+          }
+        } catch (profileError) {
+          console.log('[DEBUG] Erro no getNumberProfile:', profileError.message);
           
-          for (const prop of possiveisNumeros) {
-            if (prop && typeof prop === 'string' && /\d/.test(prop)) {
-              const numeroLimpo = sanitizePhone(prop.replace('@c.us', ''));
+          // Fallback: tentar getContact normal
+          const contato = await client.getContact(message.from);
+          console.log('[DEBUG] Contato retornado:', JSON.stringify(contato, null, 2));
+          
+          if (contato && contato.id) {
+            // Se for @lid, não tem número real disponível
+            if (contato.id.server === 'lid') {
+              numeroReal = contato.pushname || contato.formattedName || 'Contato @lid';
+            } else {
+              const numeroLimpo = sanitizePhone(contato.id.user || contato.id.replace('@c.us', ''));
               if (numeroLimpo.length >= 10) {
                 numeroReal = normalizeLocalPhone(numeroLimpo);
-                break;
               }
             }
           }
