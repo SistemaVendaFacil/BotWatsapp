@@ -380,11 +380,30 @@ function getConnectedSessionByConfig(sessionId) {
 async function processarRespostaLeed(client, message) {
   let connection;
   try {
-    const telefoneCompleto = message.from.replace('@c.us', '').replace(/\D/g, '');
-    const telefoneCliente = telefoneCompleto.slice(-11);
+    console.log(`[Lead] ========== INÍCIO DO PROCESSAMENTO ==========`);
+    console.log(`[Lead] Objeto message completo:`, JSON.stringify(message, null, 2));
+    console.log(`[Lead] message.from:`, message.from);
+    console.log(`[Lead] message.sender:`, message.sender);
+    console.log(`[Lead] message.author:`, message.author);
+    console.log(`[Lead] message.chatId:`, message.chatId);
     
+    // Extrai o número do cliente que respondeu
+    const telefoneCompleto = message.from.replace('@c.us', '').replace(/\D/g, '');
+    // Remove código do país (55) se existir e pega DDD + número
+    const telefoneSemPais = telefoneCompleto.startsWith('55') ? telefoneCompleto.slice(2) : telefoneCompleto;
+    const telefoneCliente = telefoneSemPais.slice(-11); // Pega DDD (2) + número (9 dígitos)
+    
+    console.log(`[Lead] Telefone completo: ${telefoneCompleto}`);
+    console.log(`[Lead] Telefone sem país: ${telefoneSemPais}`);
+    console.log(`[Lead] Telefone para busca: ${telefoneCliente}`);
+    console.log(`[Lead] Cliente ${telefoneCliente} respondeu com "1"`);
+    console.log(`[Lead] Mensagem completa:`, message.body);
+    console.log(`[Lead] É mensagem de grupo?`, message.isGroupMsg);
+    
+    // Conecta ao banco para verificar se é um lead que recebeu mensagem
     connection = await mysql.createConnection(dbConfig);
     await connection.execute("SET time_zone = '-03:00'");
+    console.log(`[Lead] Conexão com banco estabelecida`);
     
     // Busca o lead que recebeu mensagem e tem esse telefone
     const [leeds] = await connection.execute(`
@@ -395,6 +414,9 @@ async function processarRespostaLeed(client, message) {
       LIMIT 1
     `, [`%${telefoneCliente}%`]);
     
+    console.log(`[Lead] Leads encontrados:`, leeds.length);
+    
+    // Busca o grupo WhatsApp configurado
     const [config] = await connection.execute(`
       SELECT whatsapp_grupo
       FROM configuracoes
@@ -402,16 +424,32 @@ async function processarRespostaLeed(client, message) {
       LIMIT 1
     `);
     
+    console.log(`[Lead] Configuração encontrada:`, config.length > 0 ? 'SIM' : 'NÃO');
+    if (config.length > 0) {
+      console.log(`[Lead] Grupo WhatsApp configurado:`, config[0]?.whatsapp_grupo || 'VAZIO');
+    }
+    
     if (leeds.length === 0) {
+      console.log(`[Lead] Nenhum lead encontrado para o telefone ${telefoneCliente}`);
+      console.log(`[Lead] ========== FIM DO PROCESSAMENTO (SEM LEAD) ==========`);
       return;
     }
     
     const lead = leeds[0];
+    console.log(`[Lead] Lead encontrado:`);
+    console.log(`[Lead]   - ID: ${lead.id}`);
+    console.log(`[Lead]   - Nome: ${lead.nome_fantasia_leed}`);
+    console.log(`[Lead]   - Telefone: ${lead.telefone_leed}`);
+    console.log(`[Lead]   - Segmento: ${lead.segmento_leed}`);
+    console.log(`[Lead]   - Envio WhatsApp: ${lead.envio_whatsapp_leed}`);
     
-    await connection.execute(
+    // Atualiza o campo interesse para 'sim'
+    console.log(`[Lead] Atualizando campo interesse para 'sim'...`);
+    const [updateResult] = await connection.execute(
       'UPDATE leeds SET interesse = "sim" WHERE id = ?',
       [lead.id]
     );
+    console.log(`[Lead] Campo interesse atualizado. Linhas afetadas: ${updateResult.affectedRows}`);
     
     // Monta mensagem de notificação
     const mensagemNotificacao = `🔔 *NOVO INTERESSE - LEAD COMERCIAL*\n\n` +
@@ -420,19 +458,36 @@ async function processarRespostaLeed(client, message) {
       `🏢 *Segmento:* ${lead.segmento_leed || 'Não informado'}\n\n` +
       `✅ O cliente demonstrou interesse respondendo "1" à mensagem comercial.`;
     
+    // Envia notificação para o grupo WhatsApp configurado
     const grupoWhatsapp = config[0]?.whatsapp_grupo;
+    console.log(`[Lead] Preparando envio para grupo...`);
+    console.log(`[Lead] Grupo WhatsApp:`, grupoWhatsapp || 'NÃO CONFIGURADO');
+    console.log(`[Lead] Mensagem a ser enviada:`);
+    console.log(mensagemNotificacao);
     
     if (grupoWhatsapp) {
+      console.log(`[Lead] Enviando mensagem para o grupo ${grupoWhatsapp}...`);
       await client.sendText(grupoWhatsapp, mensagemNotificacao);
+      console.log(`[Lead] ✅ Notificação enviada com sucesso para o grupo!`);
+      console.log(`[Lead] Lead: ${lead.nome_fantasia_leed}`);
+    } else {
+      console.log(`[Lead] ❌ Grupo WhatsApp não configurado. Notificação não enviada.`);
     }
     
+    console.log(`[Lead] ========== FIM DO PROCESSAMENTO (SUCESSO) ==========`);
+    
   } catch (error) {
+    console.error('[Lead] ========== ERRO NO PROCESSAMENTO ==========');
     console.error('[Lead] Erro ao processar resposta de lead:', error.message);
+    console.error('[Lead] Stack trace:', error.stack);
   } finally {
     if (connection) {
       try {
         await connection.end();
-      } catch (e) {}
+        console.log(`[Lead] Conexão com banco fechada`);
+      } catch (e) {
+        console.error('[Lead] Erro ao fechar conexão:', e.message);
+      }
     }
   }
 }
