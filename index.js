@@ -509,7 +509,12 @@ async function verificarAgendamentos() {
         t.status,
         c.nome_cliente,
         c.telefone_cliente,
-        c.endereco_cliente,
+        c.rua_cliente,
+        c.numero_cliente,
+        c.complemento_cliente,
+        c.bairro_cliente,
+        c.cidade_cliente,
+        c.cep_cliente,
         t.setor,
         t.assunto,
         t.descricao,
@@ -623,13 +628,23 @@ async function enviarMensagemIndividual(connection, agendamento) {
       return false;
     }
 
+    // Monta endereço completo
+    const enderecoPartes = [
+      agendamento.rua_cliente,
+      agendamento.numero_cliente,
+      agendamento.complemento_cliente,
+      agendamento.bairro_cliente,
+      agendamento.cidade_cliente
+    ].filter(Boolean);
+    const enderecoCompleto = enderecoPartes.length > 0 ? enderecoPartes.join(', ') : '';
+
     const variaveis = {
       '{NOME_CLIENTE}': agendamento.nome_cliente || 'Cliente',
       '{nome_cliente}': agendamento.nome_cliente || 'Cliente',
       '{TELEFONE}': agendamento.telefone_cliente || '',
       '{telefone}': agendamento.telefone_cliente || '',
-      '{ENDERECO}': agendamento.endereco_cliente || '',
-      '{endereco}': agendamento.endereco_cliente || '',
+      '{ENDERECO}': enderecoCompleto,
+      '{endereco}': enderecoCompleto,
       '{HORARIO}': horario,
       '{horario}': horario,
       '{HORA}': horario,
@@ -706,6 +721,16 @@ async function enviarMensagemGrupo(connection, agendamento) {
       return false;
     }
 
+    // Monta endereço completo
+    const enderecoPartes = [
+      agendamento.rua_cliente,
+      agendamento.numero_cliente,
+      agendamento.complemento_cliente,
+      agendamento.bairro_cliente,
+      agendamento.cidade_cliente
+    ].filter(Boolean);
+    const enderecoCompleto = enderecoPartes.length > 0 ? enderecoPartes.join(', ') : '';
+
     const variaveis = {
       '{ID}': agendamento.id || '',
       '{id}': agendamento.id || '',
@@ -715,8 +740,8 @@ async function enviarMensagemGrupo(connection, agendamento) {
       '{nome_cliente}': agendamento.nome_cliente || '',
       '{TELEFONE}': agendamento.telefone_cliente || '',
       '{telefone}': agendamento.telefone_cliente || '',
-      '{ENDERECO}': agendamento.endereco_cliente || '',
-      '{endereco}': agendamento.endereco_cliente || '',
+      '{ENDERECO}': enderecoCompleto,
+      '{endereco}': enderecoCompleto,
       '{SETOR}': agendamento.setor || '',
       '{setor}': agendamento.setor || '',
       '{ASSUNTO}': agendamento.assunto || '',
