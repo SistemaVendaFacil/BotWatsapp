@@ -381,35 +381,37 @@ async function processarRespostaLeed(client, message) {
   let connection;
   try {
     console.log(`[Lead] ========== INÍCIO DO PROCESSAMENTO ==========`);
-    console.log(`[Lead] Objeto message completo:`, JSON.stringify(message, null, 2));
     console.log(`[Lead] message.from:`, message.from);
-    console.log(`[Lead] message.sender:`, message.sender);
-    console.log(`[Lead] message.author:`, message.author);
+    console.log(`[Lead] message.sender.pushname:`, message.sender?.pushname);
+    console.log(`[Lead] message.sender.id:`, message.sender?.id);
     console.log(`[Lead] message.chatId:`, message.chatId);
+    console.log(`[Lead] message.to:`, message.to);
+    console.log(`[Lead] message.participant:`, message.participant);
+    console.log(`[Lead] message.remote:`, message.remote);
+    console.log(`[Lead] message.author:`, message.author);
     
-    // Extrai o número do cliente que respondeu
-    const telefoneCompleto = message.from.replace('@c.us', '').replace(/\D/g, '');
+    // Extrai o número do cliente que respondeu (aceita @c.us e @lid)
+    const telefoneCompleto = message.from.replace('@c.us', '').replace('@lid', '').replace(/\D/g, '');
     // Remove código do país (55) se existir e pega DDD + número
     const telefoneSemPais = telefoneCompleto.startsWith('55') ? telefoneCompleto.slice(2) : telefoneCompleto;
     const telefoneCliente = telefoneSemPais.slice(-11); // Pega DDD (2) + número (9 dígitos)
+    const pushname = message.sender?.pushname || '';
     
     console.log(`[Lead] Telefone completo: ${telefoneCompleto}`);
-    console.log(`[Lead] Telefone sem país: ${telefoneSemPais}`);
     console.log(`[Lead] Telefone para busca: ${telefoneCliente}`);
-    console.log(`[Lead] Cliente ${telefoneCliente} respondeu com "1"`);
-    console.log(`[Lead] Mensagem completa:`, message.body);
-    console.log(`[Lead] É mensagem de grupo?`, message.isGroupMsg);
+    console.log(`[Lead] Nome do contato: ${pushname}`);
+    console.log(`[Lead] Cliente respondeu com "1"`);
     
     // Conecta ao banco para verificar se é um lead que recebeu mensagem
     connection = await mysql.createConnection(dbConfig);
     await connection.execute("SET time_zone = '-03:00'");
     console.log(`[Lead] Conexão com banco estabelecida`);
     
-    // Busca o lead que recebeu mensagem e tem esse telefone
+    // Busca o lead que recebeu mensagem (apenas por telefone)
     const [leeds] = await connection.execute(`
       SELECT id, nome_fantasia_leed, telefone_leed, segmento_leed, envio_whatsapp_leed
       FROM leeds
-      WHERE REPLACE(REPLACE(REPLACE(telefone_leed, '(', ''), ')', ''), '-', '') LIKE ? 
+      WHERE REPLACE(REPLACE(REPLACE(REPLACE(telefone_leed, '(', ''), ')', ''), '-', ''), ' ', '') LIKE ? 
       AND envio_whatsapp_leed = 'sim'
       LIMIT 1
     `, [`%${telefoneCliente}%`]);
