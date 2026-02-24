@@ -585,13 +585,40 @@ async function enviarMensagemIndividual(connection, agendamento) {
       return false;
     }
 
-    let mensagemIndividual = agendamento.whatsapp_agendamento_individual || '';
-    mensagemIndividual = mensagemIndividual.replace('{NOME_CLIENTE}', agendamento.nome_cliente || 'Cliente');
-    mensagemIndividual = mensagemIndividual.replace('{HORARIO}', new Date(agendamento.agendamento).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'}));
-    mensagemIndividual = mensagemIndividual.replace('{ASSUNTO}', agendamento.assunto);
-    mensagemIndividual = mensagemIndividual.replace('{SETOR}', agendamento.setor);
-    mensagemIndividual = mensagemIndividual.replace('{DESCRICAO}', agendamento.descricao);
-    const mensagem = mensagemIndividual;
+    // Corrigir fuso horário para Brasil
+    const dataAgendamento = new Date(agendamento.agendamento);
+    const horario = dataAgendamento.toLocaleTimeString('pt-BR', { 
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+    
+    const templateIndividual = String(agendamento.whatsapp_agendamento_individual || '').trim();
+
+    if (!templateIndividual) {
+      console.log(`[Agendador] Template whatsapp_agendamento_individual não configurado para o ticket #${agendamento.id}.`);
+      return false;
+    }
+
+    const variaveis = {
+      '{NOME_CLIENTE}': agendamento.nome_cliente || 'Cliente',
+      '{nome_cliente}': agendamento.nome_cliente || 'Cliente',
+      '{HORARIO}': horario,
+      '{horario}': horario,
+      '{HORA}': horario,
+      '{hora}': horario,
+      '{ASSUNTO}': agendamento.assunto || '',
+      '{assunto}': agendamento.assunto || '',
+      '{SETOR}': agendamento.setor || '',
+      '{setor}': agendamento.setor || '',
+      '{DESCRICAO}': agendamento.descricao || '',
+      '{descricao}': agendamento.descricao || '',
+    };
+
+    const mensagem = Object.entries(variaveis).reduce(
+      (texto, [chave, valor]) => texto.split(chave).join(String(valor)),
+      templateIndividual
+    );
 
     // Envia mensagem se tiver telefone disponível
     if (agendamento.telefone_cliente) {
@@ -637,14 +664,44 @@ async function enviarMensagemGrupo(connection, agendamento) {
       return false;
     }
 
-    let mensagemGrupo = agendamento.whatsapp_agendamento_grupo || '';
-    mensagemGrupo = mensagemGrupo.replace('{ID}', agendamento.id);
-    mensagemGrupo = mensagemGrupo.replace('{NOME_CLIENTE}', agendamento.nome_cliente);
-    mensagemGrupo = mensagemGrupo.replace('{SETOR}', agendamento.setor);
-    mensagemGrupo = mensagemGrupo.replace('{ASSUNTO}', agendamento.assunto);
-    mensagemGrupo = mensagemGrupo.replace('{DESCRICAO}', agendamento.descricao);
-    mensagemGrupo = mensagemGrupo.replace('{HORARIO}', new Date(agendamento.agendamento).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'}));
-    const mensagem = mensagemGrupo;
+    // Corrigir fuso horário para Brasil
+    const dataAgendamento = new Date(agendamento.agendamento);
+    const horario = dataAgendamento.toLocaleTimeString('pt-BR', { 
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+    
+    const templateGrupo = String(agendamento.whatsapp_agendamento_grupo || '').trim();
+
+    if (!templateGrupo) {
+      console.log(`[Agendador] Template whatsapp_agendamento_grupo não configurado para o ticket #${agendamento.id}.`);
+      return false;
+    }
+
+    const variaveis = {
+      '{ID}': agendamento.id || '',
+      '{id}': agendamento.id || '',
+      '{TICKET_ID}': agendamento.id || '',
+      '{ticket_id}': agendamento.id || '',
+      '{NOME_CLIENTE}': agendamento.nome_cliente || '',
+      '{nome_cliente}': agendamento.nome_cliente || '',
+      '{SETOR}': agendamento.setor || '',
+      '{setor}': agendamento.setor || '',
+      '{ASSUNTO}': agendamento.assunto || '',
+      '{assunto}': agendamento.assunto || '',
+      '{DESCRICAO}': agendamento.descricao || '',
+      '{descricao}': agendamento.descricao || '',
+      '{HORARIO}': horario,
+      '{horario}': horario,
+      '{HORA}': horario,
+      '{hora}': horario,
+    };
+
+    const mensagem = Object.entries(variaveis).reduce(
+      (texto, [chave, valor]) => texto.split(chave).join(String(valor)),
+      templateGrupo
+    );
 
     await sessaoConectada.client.sendText(grupoWhatsapp, mensagem);
     
