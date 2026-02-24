@@ -381,35 +381,66 @@ async function processarRespostaLeed(client, message) {
   let connection;
   try {
     // Extrai o número do cliente que respondeu
-    const telefoneCliente = message.from.replace('@c.us', '').replace(/\D/g, '');
+    const telefoneCompleto = message.from.replace('@c.us', '').replace(/\D/g, '');
+    const telefoneCliente = telefoneCompleto.slice(-10); // Pega DDD + número (últimos 10 dígitos)
     
+    console.log(`[Lead] ========== INÍCIO DO PROCESSAMENTO ==========`);
+    console.log(`[Lead] Telefone completo: ${telefoneCompleto}`);
+    console.log(`[Lead] Telefone para busca: ${telefoneCliente}`);
     console.log(`[Lead] Cliente ${telefoneCliente} respondeu com "1"`);
+    console.log(`[Lead] Mensagem completa:`, message.body);
+    console.log(`[Lead] É mensagem de grupo?`, message.isGroupMsg);
     
     // Conecta ao banco para verificar se é um lead que recebeu mensagem
     connection = await mysql.createConnection(dbConfig);
     await connection.execute("SET time_zone = '-03:00'");
+    console.log(`[Lead] Conexão com banco estabelecida`);
     
     // Busca o lead que recebeu mensagem e tem esse telefone
     const [leeds] = await connection.execute(`
       SELECT id, nome_fantasia_leed, telefone_leed, segmento_leed, envio_whatsapp_leed
       FROM leeds
-      WHERE telefone_leed LIKE ? AND envio_whatsapp_leed = 'sim'
+      WHERE REPLACE(REPLACE(REPLACE(telefone_leed, '(', ''), ')', ''), '-', '') LIKE ? 
+      AND envio_whatsapp_leed = 'sim'
       LIMIT 1
-    `, [`%${telefoneCliente.slice(-8)}%`]);
+    `, [`%${telefoneCliente}%`]);
+    
+    console.log(`[Lead] Leads encontrados:`, leeds.length);
+    
+    // Busca o grupo WhatsApp configurado
+    const [config] = await connection.execute(`
+      SELECT whatsapp_grupo
+      FROM configuracoes
+      WHERE id = 1
+      LIMIT 1
+    `);
+    
+    console.log(`[Lead] Configuração encontrada:`, config.length > 0 ? 'SIM' : 'NÃO');
+    if (config.length > 0) {
+      console.log(`[Lead] Grupo WhatsApp configurado:`, config[0]?.whatsapp_grupo || 'VAZIO');
+    }
     
     if (leeds.length === 0) {
       console.log(`[Lead] Nenhum lead encontrado para o telefone ${telefoneCliente}`);
+      console.log(`[Lead] ========== FIM DO PROCESSAMENTO (SEM LEAD) ==========`);
       return;
     }
     
     const lead = leeds[0];
-    console.log(`[Lead] Lead encontrado: ${lead.nome_fantasia_leed} - ${lead.segmento_leed}`);
+    console.log(`[Lead] Lead encontrado:`);
+    console.log(`[Lead]   - ID: ${lead.id}`);
+    console.log(`[Lead]   - Nome: ${lead.nome_fantasia_leed}`);
+    console.log(`[Lead]   - Telefone: ${lead.telefone_leed}`);
+    console.log(`[Lead]   - Segmento: ${lead.segmento_leed}`);
+    console.log(`[Lead]   - Envio WhatsApp: ${lead.envio_whatsapp_leed}`);
     
     // Atualiza o campo interesse para 'sim'
-    await connection.execute(
+    console.log(`[Lead] Atualizando campo interesse para 'sim'...`);
+    const [updateResult] = await connection.execute(
       'UPDATE leeds SET interesse = "sim" WHERE id = ?',
       [lead.id]
     );
+    console.log(`[Lead] Campo interesse atualizado. Linhas afetadas: ${updateResult.affectedRows}`);
     
     // Monta mensagem de notificação
     const mensagemNotificacao = `🔔 *NOVO INTERESSE - LEAD COMERCIAL*\n\n` +
@@ -418,18 +449,33 @@ async function processarRespostaLeed(client, message) {
       `🏢 *Segmento:* ${lead.segmento_leed || 'Não informado'}\n\n` +
       `✅ O cliente demonstrou interesse respondendo "1" à mensagem comercial.`;
     
-    // Envia notificação para o seu número
-    const meuNumero = '5512982823210@c.us';
-    await client.sendText(meuNumero, mensagemNotificacao);
+    // Envia notificação para o grupo WhatsApp configurado
+    const grupoWhatsapp = config[0]?.whatsapp_grupo;
+    console.log(`[Lead] Preparando envio para grupo...`);
+    console.log(`[Lead] Grupo WhatsApp:`, grupoWhatsapp || 'NÃO CONFIGURADO');
+    console.log(`[Lead] Mensagem a ser enviada:`);
+    console.log(mensagemNotificacao);
     
-    console.log(`[Lead] Notificação enviada para 12982823210 sobre interesse do lead ${lead.nome_fantasia_leed}`);
+    if (grupoWhatsapp) {
+      console.log(`[Lead] Enviando mensagem para o grupo ${grupoWhatsapp}...`);
+      await client.sendText(grupoWhatsapp, mensagemNotificacao);
+      console.log(`[Lead] ✅ Notificação enviada com sucesso para o grupo!`);
+      console.log(`[Lead] Lead: ${lead.nome_fantasia_leed}`);
+    } else {
+      console.log(`[Lead] ❌ Grupo WhatsApp não configurado. Notificação não enviada.`);
+    }
+    
+    console.log(`[Lead] ========== FIM DO PROCESSAMENTO (SUCESSO) ==========`);
     
   } catch (error) {
+    console.error('[Lead] ========== ERRO NO PROCESSAMENTO ==========');
     console.error('[Lead] Erro ao processar resposta de lead:', error.message);
+    console.error('[Lead] Stack trace:', error.stack);
   } finally {
     if (connection) {
       try {
         await connection.end();
+        console.log(`[Lead] Conexão com banco fechada`);
       } catch (e) {
         console.error('[Lead] Erro ao fechar conexão:', e.message);
       }
