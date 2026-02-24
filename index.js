@@ -283,72 +283,21 @@ function registerClientEvents(sessionId, client) {
   client.onStateChange((state) => handleStatusChange(sessionId, state));
 
   client.onMessage(async (message) => {
-    let numeroReal = 'Desconhecido';
-    
-    // Debug completo do objeto message
-    console.log('[DEBUG] Message completo:', JSON.stringify({
-      from: message.from,
-      to: message.to,
-      sender: message.sender,
-      author: message.author,
-      notifyName: message.notifyName,
-      chatId: message.chatId
-    }, null, 2));
-    
-    try {
-      if (message.from && !message.from.includes('@g.us')) {
-        // Tentar checkNumberStatus (método recomendado)
-        try {
-          const status = await client.checkNumberStatus(message.from);
-          console.log('[DEBUG] checkNumberStatus retornado:', JSON.stringify(status, null, 2));
-          
-          if (status && status.numberExists) {
-            // Verificar se tem número no status
-            const possiveisNumeros = [
-              status.id?.user,
-              status.id?._serialized?.replace('@c.us', '').replace('@lid', ''),
-              status.jid?.user
-            ];
-            
-            for (const num of possiveisNumeros) {
-              if (num && /^\d{10,}$/.test(sanitizePhone(num))) {
-                numeroReal = normalizeLocalPhone(sanitizePhone(num));
-                break;
-              }
-            }
-          }
-        } catch (statusError) {
-          console.log('[DEBUG] Erro no checkNumberStatus:', statusError.message);
-        }
-        
-        // Se ainda não encontrou, tentar getContact
-        if (numeroReal === 'Desconhecido') {
-          const contato = await client.getContact(message.from);
-          
-          if (contato && contato.id) {
-            if (contato.id.server === 'lid') {
-              numeroReal = contato.pushname || contato.formattedName || 'Contato @lid';
-            } else {
-              const numeroLimpo = sanitizePhone(contato.id.user || contato.id.replace('@c.us', ''));
-              if (numeroLimpo.length >= 10) {
-                numeroReal = normalizeLocalPhone(numeroLimpo);
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.log('[Erro ao obter contato]:', error.message);
-    }
-    
-    const isGrupo = message.from && message.from.includes('@g.us');
-    const tipoMensagem = message.type || 'texto';
-    const conteudo = message.body || (message.type === 'image' ? '[IMAGEM]' : message.type === 'audio' ? '[ÁUDIO]' : '[MÍDIA]');
-    
-    console.log(`[Mensagem Recebida] ${isGrupo ? 'Grupo' : 'Contato'}: ${numeroReal} | Tipo: ${tipoMensagem} | Conteúdo: ${conteudo}`);
-    
     if (message.body?.trim() === '!ping') {
       await client.sendText(message.from, 'pong');
+    }
+    
+    // Resposta para opção 2
+    if (message.body?.trim() === '2') {
+      await client.sendText(message.from, '😔 *Sentimos muito por estar tomando seu tempo* 🕒\n\nCaso mude de ideia, basta digitar **1** que estaremos aqui para ajudar! 💙✨');
+      return;
+    }
+    
+    // Resposta para opções diferentes de 1 e 2
+    const mensagemLimpa = message.body?.trim();
+    if (mensagemLimpa && mensagemLimpa !== '1' && mensagemLimpa !== '2' && !isNaN(mensagemLimpa)) {
+      await client.sendText(message.from, '🤖 *Infelizmente sou um robô* e só aceito os números **1** ou **2**! 😅\n\nPor favor, digite apenas **1** para continuar ou **2** para finalizar. 🙏');
+      return;
     }
   });
 }
