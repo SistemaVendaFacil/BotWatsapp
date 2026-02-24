@@ -162,11 +162,9 @@ app.delete('/api/session/:sessionId', async (req, res) => {
   return res.json({ success: true });
 });
 
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log(`Servidor WPPConnect ouvindo na porta ${PORT}`);
   restorePersistedSessions();
-  // Reconecta sessão configurada no banco
-  await reconectarSessaoConfigurada();
   // Inicia o verificador de agendamentos
   iniciarVerificadorAgendamentos();
 });
@@ -464,100 +462,6 @@ async function restorePersistedSessions() {
   }
 }
 
-// Reconectar automaticamente a sessão configurada no banco de dados
-async function reconectarSessaoConfigurada() {
-  let connection;
-  try {
-    console.log('[AutoConnect] Buscando sessão configurada no banco de dados...');
-    connection = await mysql.createConnection(dbConfig);
-    
-    const [configs] = await connection.execute(
-      'SELECT whatsapp_sessao FROM configuracoes WHERE id = 1 LIMIT 1'
-    );
-    
-    if (!configs || configs.length === 0 || !configs[0].whatsapp_sessao) {
-      console.log('[AutoConnect] Nenhuma sessão configurada no banco.');
-      return;
-    }
-    
-    const sessionId = configs[0].whatsapp_sessao.trim();
-    console.log(`[AutoConnect] Sessão configurada: ${sessionId}`);
-    
-    // Verifica se a sessão já está conectada
-    if (sessions.has(sessionId)) {
-      const sessionData = sessions.get(sessionId);
-      if (sessionData.status === 'CONECTADO') {
-        console.log(`[AutoConnect] Sessão ${sessionId} já está conectada.`);
-        return;
-      }
-    }
-    
-    // Extrai telefone do sessionId
-    const phoneIntl = sessionId.replace('session_', '');
-    const phoneLocal = phoneIntl.startsWith('55') ? phoneIntl.slice(2) : phoneIntl;
-    
-    console.log(`[AutoConnect] Iniciando reconexão da sessão ${sessionId}...`);
-    
-    // Cria ou atualiza a sessão
-    const sessionData = {
-      sessionId,
-      phone: phoneLocal,
-      phoneIntl,
-      company: 'Memocash',
-      status: 'AGUARDANDO_QR',
-      qrCode: null,
-      qrCodeAscii: null,
-      updatedAt: new Date().toISOString(),
-      connectedAt: null,
-      devices: [],
-      rawStatus: null,
-      error: null,
-      client: null,
-    };
-    
-    sessions.set(sessionId, sessionData);
-    
-    // Tenta conectar
-    wppconnect
-      .create({
-        session: sessionId,
-        autoClose: 0,
-        headless: true,
-        devtools: false,
-        useChrome: true,
-        logQR: true,
-        puppeteerOptions: {
-          headless: true,
-          args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        },
-        catchQR: (base64Qr, asciiQR) => {
-          console.log(`[AutoConnect] QR Code gerado para ${sessionId}. Acesse /start/${sessionId} para escanear.`);
-          updateQrCode(sessionId, base64Qr, asciiQR);
-        },
-        statusFind: (statusSession) => handleStatusChange(sessionId, statusSession),
-      })
-      .then((client) => {
-        sessionData.client = client;
-        registerClientEvents(sessionId, client);
-        sessionData.updatedAt = new Date().toISOString();
-        console.log(`[AutoConnect] Sessão ${sessionId} conectada com sucesso!`);
-      })
-      .catch((error) => {
-        sessionData.status = 'ERRO';
-        sessionData.error = error.message || 'Falha ao conectar sessão';
-        sessionData.updatedAt = new Date().toISOString();
-        console.error(`[AutoConnect] Erro ao conectar sessão ${sessionId}:`, error.message);
-      });
-      
-  } catch (error) {
-    console.error('[AutoConnect] Erro ao buscar configuração:', error.message);
-  } finally {
-    if (connection) {
-      await connection.end();
-    }
-  }
-}
-
 // Sistema de verificação de agendamentos
 async function iniciarVerificadorAgendamentos() {
   if (agendamentoAtivo) {
@@ -640,23 +544,22 @@ async function verificarAgendamentos() {
     for (const agendamento of agendamentos) {
       console.log(`[Agendador] Processando agendamento #${agendamento.id} (Status: ${agendamento.status})...`);
       
-      // Verificar se o ticket foi finalizado
+      // Verificar se o ticket está finalizado
       if (agendamento.status === 'finalizado') {
-        console.log(`[Agendador] Ticket #${agendamento.id} está finalizado. Zerando datas de envio...`);
+        console.log(`[Agendador] Ticket #${agendamento.id} está finalizado. Marcando campos de WhatsApp como 0 para não enviar.`);
         await connection.execute(
           'UPDATE tickets SET whatsapp_enviado = 0, whatsapp_grupo_enviado = 0 WHERE id = ?',
           [agendamento.id]
         );
-        console.log(`[Agendador] Ticket #${agendamento.id} marcado para não enviar WhatsApp.`);
         continue;
       }
-      
-      // Apenas processa se o ticket estiver aberto
+
+      // Verificar se o ticket está aberto
       if (agendamento.status !== 'aberto') {
-        console.log(`[Agendador] Ticket #${agendamento.id} não está aberto. Ignorando...`);
+        console.log(`[Agendador] Ticket #${agendamento.id} não está aberto (Status: ${agendamento.status}). Pulando envio.`);
         continue;
       }
-      
+
       const agora = new Date();
       const dataHoraAgendamento = new Date(agendamento.agendamento);
       const minutosRestantes = Math.floor((dataHoraAgendamento - agora) / (1000 * 60));
