@@ -383,18 +383,29 @@ async function processarRespostaLeed(client, message) {
     console.log(`[Lead] ========== INÍCIO DO PROCESSAMENTO ==========`);
     console.log(`[Lead] message.from:`, message.from);
     console.log(`[Lead] message.sender.pushname:`, message.sender?.pushname);
-    console.log(`[Lead] message.sender.id:`, message.sender?.id);
-    console.log(`[Lead] message.chatId:`, message.chatId);
-    console.log(`[Lead] message.to:`, message.to);
-    console.log(`[Lead] message.participant:`, message.participant);
-    console.log(`[Lead] message.remote:`, message.remote);
-    console.log(`[Lead] message.author:`, message.author);
     
-    // Extrai o número do cliente que respondeu (aceita @c.us e @lid)
-    const telefoneCompleto = message.from.replace('@c.us', '').replace('@lid', '').replace(/\D/g, '');
-    // Remove código do país (55) se existir e pega DDD + número
+    // Tenta obter informações do contato via API
+    let telefoneReal = null;
+    try {
+      const contact = await client.getContact(message.from);
+      console.log(`[Lead] Contato obtido:`, JSON.stringify(contact, null, 2));
+      
+      // Tenta extrair número de diferentes campos
+      if (contact.id && contact.id.user) {
+        telefoneReal = contact.id.user;
+        console.log(`[Lead] Telefone encontrado em contact.id.user:`, telefoneReal);
+      } else if (contact.number) {
+        telefoneReal = contact.number;
+        console.log(`[Lead] Telefone encontrado em contact.number:`, telefoneReal);
+      }
+    } catch (error) {
+      console.log(`[Lead] Erro ao obter contato:`, error.message);
+    }
+    
+    // Se não conseguiu obter telefone real, usa o from
+    const telefoneCompleto = (telefoneReal || message.from.replace('@c.us', '').replace('@lid', '')).replace(/\D/g, '');
     const telefoneSemPais = telefoneCompleto.startsWith('55') ? telefoneCompleto.slice(2) : telefoneCompleto;
-    const telefoneCliente = telefoneSemPais.slice(-11); // Pega DDD (2) + número (9 dígitos)
+    const telefoneCliente = telefoneSemPais.slice(-11);
     const pushname = message.sender?.pushname || '';
     
     console.log(`[Lead] Telefone completo: ${telefoneCompleto}`);
@@ -407,14 +418,14 @@ async function processarRespostaLeed(client, message) {
     await connection.execute("SET time_zone = '-03:00'");
     console.log(`[Lead] Conexão com banco estabelecida`);
     
-    // Busca o lead que recebeu mensagem (apenas por telefone)
+    // Busca o lead que recebeu mensagem (por nome do contato)
     const [leeds] = await connection.execute(`
       SELECT id, nome_fantasia_leed, telefone_leed, segmento_leed, envio_whatsapp_leed
       FROM leeds
-      WHERE REPLACE(REPLACE(REPLACE(REPLACE(telefone_leed, '(', ''), ')', ''), '-', ''), ' ', '') LIKE ? 
+      WHERE UPPER(nome_fantasia_leed) LIKE UPPER(?) 
       AND envio_whatsapp_leed = 'sim'
       LIMIT 1
-    `, [`%${telefoneCliente}%`]);
+    `, [`%${pushname.split(' ')[0]}%`]); // Usa apenas o primeiro nome para busca mais flexível
     
     console.log(`[Lead] Leads encontrados:`, leeds.length);
     
