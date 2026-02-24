@@ -475,16 +475,16 @@ async function iniciarVerificadorAgendamentos() {
   // Executa a primeira verificação imediatamente
   await verificarAgendamentos();
 
-  // Configura para verificar a cada 5 minutos (300000ms)
+  // Configura para verificar a cada 2 minutos (120000ms)
   intervaloVerificacao = setInterval(async () => {
     try {
       await verificarAgendamentos();
     } catch (error) {
       console.error('[Agendador] Erro na verificação:', error.message);
     }
-  }, 300000); // 5 minutos
+  }, 120000); // 2 minutos
 
-  console.log('[Agendador] Verificador configurado para rodar a cada 5 minutos.');
+  console.log('[Agendador] Verificador configurado para rodar a cada 2 minutos.');
 }
 
 async function verificarAgendamentos() {
@@ -525,9 +525,9 @@ async function verificarAgendamentos() {
       WHERE DATE(t.agendamento) = CURDATE()
       AND t.agendamento IS NOT NULL
       AND (
-        (t.whatsapp_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 60)
+        (t.whatsapp_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 2)
         OR 
-        (t.whatsapp_grupo_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 30)
+        (t.whatsapp_grupo_enviado IS NULL AND TIMESTAMPDIFF(MINUTE, NOW(), t.agendamento) <= 2)
       )
       ORDER BY t.agendamento
     `);
@@ -544,8 +544,8 @@ async function verificarAgendamentos() {
     for (const agendamento of agendamentos) {
       console.log(`[Agendador] Processando agendamento #${agendamento.id} (Status: ${agendamento.status})...`);
       
-      // Verificar se o ticket está finalizado
-      if (agendamento.status === 'finalizado') {
+      // Verificar se o ticket está finalizado (case insensitive)
+      if (agendamento.status && agendamento.status.toLowerCase() === 'finalizado') {
         console.log(`[Agendador] Ticket #${agendamento.id} está finalizado. Marcando campos de WhatsApp como 0 para não enviar.`);
         await connection.execute(
           'UPDATE tickets SET whatsapp_enviado = 0, whatsapp_grupo_enviado = 0 WHERE id = ?',
@@ -554,8 +554,8 @@ async function verificarAgendamentos() {
         continue;
       }
 
-      // Verificar se o ticket está aberto
-      if (agendamento.status !== 'aberto') {
+      // Verificar se o ticket está aberto (case insensitive)
+      if (!agendamento.status || agendamento.status.toLowerCase() !== 'aberto') {
         console.log(`[Agendador] Ticket #${agendamento.id} não está aberto (Status: ${agendamento.status}). Pulando envio.`);
         continue;
       }
@@ -566,14 +566,14 @@ async function verificarAgendamentos() {
 
       console.log(`[Agendador] Agendamento #${agendamento.id}: ${minutosRestantes} minutos restantes`);
 
-      // Envia mensagem individual se ainda não foi enviado e já passou de 1 hora antes
-      if (!agendamento.whatsapp_enviado && minutosRestantes <= 60) {
+      // Envia mensagem individual se ainda não foi enviado e já passou de 2 minutos antes
+      if (!agendamento.whatsapp_enviado && minutosRestantes <= 2) {
         console.log(`[Agendador] Enviando mensagem individual para #${agendamento.id}...`);
         await enviarMensagemIndividual(connection, agendamento);
       }
 
-      // Envia mensagem no grupo se ainda não foi enviado e já passou de 30 minutos antes
-      if (!agendamento.whatsapp_grupo_enviado && minutosRestantes <= 30) {
+      // Envia mensagem no grupo se ainda não foi enviado e já passou de 2 minutos antes
+      if (!agendamento.whatsapp_grupo_enviado && minutosRestantes <= 2) {
         console.log(`[Agendador] Enviando mensagem de grupo para #${agendamento.id}...`);
         await enviarMensagemGrupo(connection, agendamento);
       }
