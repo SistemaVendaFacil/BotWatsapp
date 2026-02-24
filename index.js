@@ -286,6 +286,13 @@ function registerClientEvents(sessionId, client) {
     if (message.body?.trim() === '!ping') {
       await client.sendText(message.from, 'pong');
     }
+    
+    // Log de resposta do cliente com número tratado
+    if (message.from && message.from.includes('@c.us')) {
+      const numeroTratado = sanitizePhone(message.from.replace('@c.us', ''));
+      const numeroLocal = normalizeLocalPhone(numeroTratado);
+      console.log(`[RESPOSTA] Cliente ${numeroLocal} respondeu: "${message.body}"`);
+    }
   });
 }
 
