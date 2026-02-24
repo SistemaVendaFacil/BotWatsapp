@@ -283,11 +283,25 @@ function registerClientEvents(sessionId, client) {
   client.onStateChange((state) => handleStatusChange(sessionId, state));
 
   client.onMessage(async (message) => {
-    const numeroLimpo = sanitizePhone(message.from.replace('@c.us', '').replace('@g.us', ''));
-    const numeroLocal = normalizeLocalPhone(numeroLimpo);
-    const isGrupo = message.from.includes('@g.us');
+    let numeroReal = 'Desconhecido';
     
-    console.log(`[Mensagem Recebida] ${isGrupo ? 'Grupo' : 'Contato'}: ${numeroLocal} | Texto: ${message.body}`);
+    try {
+      if (message.from && !message.from.includes('@g.us')) {
+        const contato = await client.getContact(message.from);
+        if (contato && contato.id) {
+          const numeroLimpo = sanitizePhone(contato.id.user || contato.id.replace('@c.us', ''));
+          numeroReal = normalizeLocalPhone(numeroLimpo);
+        }
+      }
+    } catch (error) {
+      console.log('[Erro ao obter contato]:', error.message);
+    }
+    
+    const isGrupo = message.from && message.from.includes('@g.us');
+    const tipoMensagem = message.type || 'texto';
+    const conteudo = message.body || (message.type === 'image' ? '[IMAGEM]' : message.type === 'audio' ? '[ÁUDIO]' : '[MÍDIA]');
+    
+    console.log(`[Mensagem Recebida] ${isGrupo ? 'Grupo' : 'Contato'}: ${numeroReal} | Tipo: ${tipoMensagem} | Conteúdo: ${conteudo}`);
     
     if (message.body?.trim() === '!ping') {
       await client.sendText(message.from, 'pong');
