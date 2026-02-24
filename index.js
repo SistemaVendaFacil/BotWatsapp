@@ -285,28 +285,47 @@ function registerClientEvents(sessionId, client) {
   client.onMessage(async (message) => {
     let numeroReal = 'Desconhecido';
     
+    // Debug completo do objeto message
+    console.log('[DEBUG] Message completo:', JSON.stringify({
+      from: message.from,
+      to: message.to,
+      sender: message.sender,
+      author: message.author,
+      notifyName: message.notifyName,
+      chatId: message.chatId
+    }, null, 2));
+    
     try {
       if (message.from && !message.from.includes('@g.us')) {
-        // Tentar obter número real usando getNumberProfile
+        // Tentar checkNumberStatus (método recomendado)
         try {
-          const profile = await client.getNumberProfile(message.from);
-          console.log('[DEBUG] Profile retornado:', JSON.stringify(profile, null, 2));
+          const status = await client.checkNumberStatus(message.from);
+          console.log('[DEBUG] checkNumberStatus retornado:', JSON.stringify(status, null, 2));
           
-          if (profile && profile.number) {
-            const numeroLimpo = sanitizePhone(profile.number);
-            if (numeroLimpo.length >= 10) {
-              numeroReal = normalizeLocalPhone(numeroLimpo);
+          if (status && status.numberExists) {
+            // Verificar se tem número no status
+            const possiveisNumeros = [
+              status.id?.user,
+              status.id?._serialized?.replace('@c.us', '').replace('@lid', ''),
+              status.jid?.user
+            ];
+            
+            for (const num of possiveisNumeros) {
+              if (num && /^\d{10,}$/.test(sanitizePhone(num))) {
+                numeroReal = normalizeLocalPhone(sanitizePhone(num));
+                break;
+              }
             }
           }
-        } catch (profileError) {
-          console.log('[DEBUG] Erro no getNumberProfile:', profileError.message);
-          
-          // Fallback: tentar getContact normal
+        } catch (statusError) {
+          console.log('[DEBUG] Erro no checkNumberStatus:', statusError.message);
+        }
+        
+        // Se ainda não encontrou, tentar getContact
+        if (numeroReal === 'Desconhecido') {
           const contato = await client.getContact(message.from);
-          console.log('[DEBUG] Contato retornado:', JSON.stringify(contato, null, 2));
           
           if (contato && contato.id) {
-            // Se for @lid, não tem número real disponível
             if (contato.id.server === 'lid') {
               numeroReal = contato.pushname || contato.formattedName || 'Contato @lid';
             } else {
