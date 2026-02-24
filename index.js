@@ -286,6 +286,11 @@ function registerClientEvents(sessionId, client) {
     if (message.body?.trim() === '!ping') {
       await client.sendText(message.from, 'pong');
     }
+    
+    // Verifica se é resposta "1" de um cliente de lead comercial
+    if (message.body?.trim() === '1' && !message.isGroupMsg) {
+      await processarRespostaLeed(client, message);
+    }
   });
 }
 
@@ -370,6 +375,66 @@ function getConnectedSessionByConfig(sessionId) {
   return Array.from(sessions.values()).find(
     (sessao) => ['CONECTADO', 'SYNCING'].includes(sessao.status) && sessao.client
   ) || null;
+}
+
+async function processarRespostaLeed(client, message) {
+  let connection;
+  try {
+    // Extrai o número do cliente que respondeu
+    const telefoneCliente = message.from.replace('@c.us', '').replace(/\D/g, '');
+    
+    console.log(`[Lead] Cliente ${telefoneCliente} respondeu com "1"`);
+    
+    // Conecta ao banco para verificar se é um lead que recebeu mensagem
+    connection = await mysql.createConnection(dbConfig);
+    await connection.execute("SET time_zone = '-03:00'");
+    
+    // Busca o lead que recebeu mensagem e tem esse telefone
+    const [leeds] = await connection.execute(`
+      SELECT id, nome_fantasia_leed, telefone_leed, segmento_leed, envio_whatsapp_leed
+      FROM leeds
+      WHERE telefone_leed LIKE ? AND envio_whatsapp_leed = 'sim'
+      LIMIT 1
+    `, [`%${telefoneCliente.slice(-8)}%`]);
+    
+    if (leeds.length === 0) {
+      console.log(`[Lead] Nenhum lead encontrado para o telefone ${telefoneCliente}`);
+      return;
+    }
+    
+    const lead = leeds[0];
+    console.log(`[Lead] Lead encontrado: ${lead.nome_fantasia_leed} - ${lead.segmento_leed}`);
+    
+    // Atualiza o campo interesse para 'sim'
+    await connection.execute(
+      'UPDATE leeds SET interesse = "sim" WHERE id = ?',
+      [lead.id]
+    );
+    
+    // Monta mensagem de notificação
+    const mensagemNotificacao = `🔔 *NOVO INTERESSE - LEAD COMERCIAL*\n\n` +
+      `📋 *Nome Fantasia:* ${lead.nome_fantasia_leed || 'Não informado'}\n` +
+      `📞 *Telefone:* ${lead.telefone_leed || 'Não informado'}\n` +
+      `🏢 *Segmento:* ${lead.segmento_leed || 'Não informado'}\n\n` +
+      `✅ O cliente demonstrou interesse respondendo "1" à mensagem comercial.`;
+    
+    // Envia notificação para o seu número
+    const meuNumero = '5512982823210@c.us';
+    await client.sendText(meuNumero, mensagemNotificacao);
+    
+    console.log(`[Lead] Notificação enviada para 12982823210 sobre interesse do lead ${lead.nome_fantasia_leed}`);
+    
+  } catch (error) {
+    console.error('[Lead] Erro ao processar resposta de lead:', error.message);
+  } finally {
+    if (connection) {
+      try {
+        await connection.end();
+      } catch (e) {
+        console.error('[Lead] Erro ao fechar conexão:', e.message);
+      }
+    }
+  }
 }
 
 async function deleteSessionArtifacts(sessionId) {
