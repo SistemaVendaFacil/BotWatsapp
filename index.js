@@ -283,24 +283,35 @@ function registerClientEvents(sessionId, client) {
   client.onStateChange((state) => handleStatusChange(sessionId, state));
 
   client.onMessage(async (message) => {
-    if (message.body?.trim() === '!ping') {
-      await client.sendText(message.from, 'pong');
+    // Verifica se é mensagem de grupo
+    const isGroup = message.from.includes('@g.us');
+    
+    // Se for grupo, ignora completamente (não responde nada)
+    if (isGroup) {
+      return;
     }
     
-    // Resposta para opção 1
-    if (message.body?.trim() === '1') {
+    // Comando de teste ping
+    if (message.body?.trim() === '!ping') {
+      await client.sendText(message.from, 'pong');
+      return;
+    }
+    
+    const mensagemLimpa = message.body?.trim();
+    
+    // Resposta para opção 1 (apenas se for exatamente "1")
+    if (mensagemLimpa === '1') {
       await client.sendText(message.from, '🎉 *Que ótima escolha!* Estou muito feliz em ajudar! 😊\n\n📞 *Vou te passar o contato de nosso consultor:*\n\n👨‍💼 **Alex**\n📱 (12) 99792-3453\n\n🚀 Ele entrará em contato com você o mais rápido possível para tirar todas as dúvidas! ✨\n\nAgradecemos seu interesse! 💚');
       return;
     }
     
-    // Resposta para opção 2
-    if (message.body?.trim() === '2') {
+    // Resposta para opção 2 (apenas se for exatamente "2")
+    if (mensagemLimpa === '2') {
       await client.sendText(message.from, '😔 *Sentimos muito por estar tomando seu tempo* 🕒\n\nCaso mude de ideia, basta digitar **1** que estaremos aqui para ajudar! 💚✨');
       return;
     }
     
-    // Resposta para opções diferentes de 1 e 2
-    const mensagemLimpa = message.body?.trim();
+    // Resposta para qualquer outra mensagem que não seja "1" ou "2"
     if (mensagemLimpa && mensagemLimpa !== '1' && mensagemLimpa !== '2') {
       await client.sendText(message.from, '🤖 *Infelizmente sou um robô* e não entendo o que você está me falando! 🤖\n\n');
       return;
