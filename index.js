@@ -286,8 +286,13 @@ function registerClientEvents(sessionId, client) {
     // Verifica se é mensagem de grupo
     const isGroup = message.from.includes('@g.us');
     
-    // Se for grupo, ignora completamente (não responde nada)
-    if (isGroup) {
+    // Verifica se é mensagem de status (ignora completamente)
+    const isStatus = message.from.includes('@broadcast') || 
+                    (message.type && message.type === 'status') ||
+                    (message.isStatus === true);
+    
+    // Se for grupo ou status, ignora completamente (não responde nada)
+    if (isGroup || isStatus) {
       return;
     }
     
@@ -694,9 +699,12 @@ async function enviarMensagemIndividual(connection, agendamento) {
 
     // Envia mensagem se tiver telefone disponível
     if (agendamento.telefone_cliente) {
-      const telefoneLimpo = agendamento.telefone_cliente.replace(/\D/g, '');
+      const telefoneStr = String(agendamento.telefone_cliente || '').trim();
+      const telefoneLimpo = telefoneStr.replace(/\D/g, '');
       const telefoneIntl = telefoneLimpo.startsWith('55') ? telefoneLimpo : `55${telefoneLimpo}`;
       const chatId = `${telefoneIntl}@c.us`;
+      
+      console.log(`[Agendador] Enviando para chatId: ${chatId}`);
 
       await sessaoConectada.client.sendText(chatId, mensagem);
       console.log(`[Agendador] Mensagem individual enviada para ${agendamento.nome_cliente} (${agendamento.telefone_cliente})`);
@@ -735,6 +743,14 @@ async function enviarMensagemGrupo(connection, agendamento) {
       console.log(`[Agendador] Agendamento ${agendamento.id} não possui grupo WhatsApp definido.`);
       return false;
     }
+    
+    // Validar formato do ID do grupo
+    if (!grupoWhatsapp.includes('@g.us')) {
+      console.log(`[Agendador] Formato inválido de grupo WhatsApp: ${grupoWhatsapp}`);
+      return false;
+    }
+    
+    console.log(`[Agendador] Enviando para grupo: ${grupoWhatsapp}`);
 
     // Corrigir fuso horário para Brasil
     const dataAgendamento = new Date(agendamento.agendamento);
@@ -789,7 +805,7 @@ async function enviarMensagemGrupo(connection, agendamento) {
       templateGrupo
     );
 
-    await sessaoConectada.client.sendText(grupoWhatsapp, mensagem);
+    await sessaoConectada.client.sendText(String(grupoWhatsapp), String(mensagem));
     
     // Marca como enviado no banco
     await connection.execute(
