@@ -9,19 +9,28 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const sessions = new Map();
 
-// Configuração do banco de dados direta
+// Configuração do banco de dados com pool de conexões
 const dbConfig = {
-  host: process.env.DB_HOST || 'srv881.hstgr.io', // <-- Host oficial da Hostinger
+  host: process.env.DB_HOST || 'srv881.hstgr.io',
   user: process.env.DB_USER || 'u490253103_automacao',
   password: process.env.DB_PASSWORD || 'Y4m4t02@12345',
   database: process.env.DB_NAME || 'u490253103_automacao',
   charset: 'utf8mb4',
-  timezone: '-03:00'
+  timezone: '-03:00',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 };
+
+// Pool de conexões MySQL
+let dbPool = null;
 
 // Variáveis de controle do agendador
 let agendamentoAtivo = false;
 let intervaloVerificacao = null;
+let intervaloKeepAlive = null;
 
 app.use(cors({
     origin: ['http://localhost', 'http://127.0.0.1', 'http://192.168.15.100:8080', 'https://sistemavendafacil.com'],
@@ -162,11 +171,21 @@ app.delete('/api/session/:sessionId', async (req, res) => {
   return res.json({ success: true });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Servidor WPPConnect ouvindo na porta ${PORT}`);
+  
+  // Inicializa pool de conexões
+  try {
+    dbPool = mysql.createPool(dbConfig);
+    await dbPool.execute("SET time_zone = '-03:00'");
+    console.log('[DB Pool] Pool de conexões MySQL criado com sucesso');
+  } catch (error) {
+    console.error('[DB Pool] Erro ao criar pool:', error.message);
+  }
+  
   restorePersistedSessions();
-  // Inicia o verificador de agendamentos
   iniciarVerificadorAgendamentos();
+  iniciarKeepAlive();
 });
 
 function sanitizePhone(phone) {
@@ -525,19 +544,16 @@ async function iniciarVerificadorAgendamentos() {
 async function verificarAgendamentos() {
   console.log('[Agendador] Verificando agendamentos...');
   
-  let connection;
+  if (!dbPool) {
+    console.error('[Agendador] Pool de conexões não está disponível');
+    return;
+  }
+  
   try {
-    console.log('[Agendador] Conectando ao banco de dados...');
-    connection = await mysql.createConnection(dbConfig);
-    console.log('[Agendador] Conectado ao banco com sucesso!');
-    
-    // Define fuso horário de Brasília igual ao arquivo PHP
-    await connection.execute("SET time_zone = '-03:00'");
-    console.log('[Agendador] Timezone configurado para -03:00');
     
     // Busca agendamentos que precisam de notificação
     console.log('[Agendador] Executando query de agendamentos...');
-    const [agendamentos] = await connection.execute(`
+    const [agendamentos] = await dbPool.execute(`
       SELECT 
         t.id,
         t.usuario,
@@ -588,7 +604,7 @@ async function verificarAgendamentos() {
       // Verificar se o ticket está finalizado (case insensitive)
       if (agendamento.status && agendamento.status.toLowerCase() === 'finalizado') {
         console.log(`[Agendador] Ticket #${agendamento.id} está finalizado. Marcando campos de WhatsApp como 0 para não enviar.`);
-        await connection.execute(
+        await dbPool.execute(
           'UPDATE tickets SET whatsapp_enviado = 0, whatsapp_grupo_enviado = 0 WHERE id = ?',
           [agendamento.id]
         );
@@ -610,16 +626,16 @@ async function verificarAgendamentos() {
       // Só envia individual se AMBOS os campos forem NULL
       if (!agendamento.whatsapp_enviado && !agendamento.whatsapp_grupo_enviado && minutosRestantes <= 60) {
         console.log(`[Agendador] Tentando enviar mensagem individual para #${agendamento.id}...`);
-        const enviouIndividual = await enviarMensagemIndividual(connection, agendamento);
+        const enviouIndividual = await enviarMensagemIndividual(null, agendamento);
         
         // Se conseguiu enviar individual, tenta enviar grupo também
         if (enviouIndividual) {
           console.log(`[Agendador] Individual enviado! Tentando enviar para grupo também...`);
-          await enviarMensagemGrupo(connection, agendamento);
+          await enviarMensagemGrupo(null, agendamento);
         } else {
           // Se falhou individual, tenta grupo como alternativa
           console.log(`[Agendador] Falhou individual. Tentando enviar para grupo como alternativa...`);
-          await enviarMensagemGrupo(connection, agendamento);
+          await enviarMensagemGrupo(null, agendamento);
         }
       }
     }
@@ -627,19 +643,10 @@ async function verificarAgendamentos() {
   } catch (error) {
     console.error('[Agendador] Erro detalhado ao verificar agendamentos:', error);
     console.error('[Agendador] Stack trace:', error.stack);
-  } finally {
-    if (connection) {
-      try {
-        await connection.end();
-        console.log('[Agendador] Conexão com banco fechada.');
-      } catch (closeError) {
-        console.error('[Agendador] Erro ao fechar conexão:', closeError);
-      }
-    }
   }
 }
 
-async function enviarMensagemIndividual(connection, agendamento) {
+async function enviarMensagemIndividual(_, agendamento) {
   try {
     const sessaoConectada = getConnectedSessionByConfig(agendamento.whatsapp_sessao);
     
@@ -714,7 +721,7 @@ async function enviarMensagemIndividual(connection, agendamento) {
     }
     
     // Marca como enviado no banco
-    await connection.execute(
+    await dbPool.execute(
       'UPDATE tickets SET whatsapp_enviado = NOW() WHERE id = ?',
       [agendamento.id]
     );
@@ -728,7 +735,7 @@ async function enviarMensagemIndividual(connection, agendamento) {
   }
 }
 
-async function enviarMensagemGrupo(connection, agendamento) {
+async function enviarMensagemGrupo(_, agendamento) {
   try {
     const sessaoConectada = getConnectedSessionByConfig(agendamento.whatsapp_sessao);
     
@@ -808,7 +815,7 @@ async function enviarMensagemGrupo(connection, agendamento) {
     await sessaoConectada.client.sendText(String(grupoWhatsapp), String(mensagem));
     
     // Marca como enviado no banco
-    await connection.execute(
+    await dbPool.execute(
       'UPDATE tickets SET whatsapp_grupo_enviado = NOW() WHERE id = ?',
       [agendamento.id]
     );
@@ -854,25 +861,71 @@ app.get('/api/agendador/status', (req, res) => {
   });
 });
 
+// Sistema de Keep-Alive para manter sessões ativas
+function iniciarKeepAlive() {
+  console.log('[Keep-Alive] Iniciando sistema de keep-alive...');
+  
+  // Verifica saúde das sessões a cada 5 minutos
+  intervaloKeepAlive = setInterval(async () => {
+    try {
+      const sessionsArray = Array.from(sessions.values());
+      const sessoesConectadas = sessionsArray.filter(s => s.status === 'CONECTADO' && s.client);
+      
+      console.log(`[Keep-Alive] Verificando ${sessoesConectadas.length} sessão(ões) conectada(s)...`);
+      
+      for (const session of sessoesConectadas) {
+        try {
+          // Tenta obter estado da conexão
+          const state = await session.client.getConnectionState();
+          console.log(`[Keep-Alive] Sessão ${session.sessionId}: ${state}`);
+          
+          // Se desconectado, atualiza status
+          if (state === 'DISCONNECTED' || state === 'TIMEOUT') {
+            session.status = 'DESCONECTADO';
+            session.updatedAt = new Date().toISOString();
+            console.log(`[Keep-Alive] Sessão ${session.sessionId} foi desconectada`);
+          }
+        } catch (error) {
+          console.error(`[Keep-Alive] Erro ao verificar sessão ${session.sessionId}:`, error.message);
+        }
+      }
+      
+      // Testa pool de conexões MySQL
+      if (dbPool) {
+        try {
+          await dbPool.execute('SELECT 1');
+          console.log('[Keep-Alive] Pool MySQL está ativo');
+        } catch (error) {
+          console.error('[Keep-Alive] Erro no pool MySQL:', error.message);
+        }
+      }
+    } catch (error) {
+      console.error('[Keep-Alive] Erro geral:', error.message);
+    }
+  }, 300000); // 5 minutos
+  
+  console.log('[Keep-Alive] Sistema configurado para rodar a cada 5 minutos.');
+}
+
 // Endpoint para testar conexão com banco
 app.get('/api/test-db', async (req, res) => {
-  let connection;
   try {
-    console.log('[Test DB] Configuração:', dbConfig);
-    connection = await mysql.createConnection(dbConfig);
-    await connection.execute("SET time_zone = '-03:00'");
+    if (!dbPool) {
+      return res.status(500).json({
+        success: false,
+        error: 'Pool de conexões não inicializado'
+      });
+    }
     
     // Testa query simples
-    const [result] = await connection.execute('SELECT 1 as test');
+    const [result] = await dbPool.execute('SELECT 1 as test');
     
     // Testa query de agendamentos
-    const [agendamentos] = await connection.execute(`
+    const [agendamentos] = await dbPool.execute(`
       SELECT COUNT(*) as total FROM tickets 
       WHERE agendamento IS NOT NULL 
       AND DATE(agendamento) = CURDATE()
     `);
-    
-    await connection.end();
     
     return res.json({
       success: true,
@@ -892,11 +945,29 @@ app.get('/api/test-db', async (req, res) => {
       error: error.message,
       stack: error.stack
     });
-  } finally {
-    if (connection) {
-      try {
-        await connection.end();
-      } catch (e) {}
-    }
   }
+});
+
+// Endpoint para verificar saúde do sistema
+app.get('/api/health', async (req, res) => {
+  const sessionsArray = Array.from(sessions.values());
+  const sessoesConectadas = sessionsArray.filter(s => s.status === 'CONECTADO');
+  
+  return res.json({
+    success: true,
+    uptime: process.uptime(),
+    sessoes: {
+      total: sessions.size,
+      conectadas: sessoesConectadas.length
+    },
+    agendador: {
+      ativo: agendamentoAtivo
+    },
+    keepAlive: {
+      ativo: intervaloKeepAlive !== null
+    },
+    database: {
+      poolAtivo: dbPool !== null
+    }
+  });
 });
